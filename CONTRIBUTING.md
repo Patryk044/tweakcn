@@ -105,7 +105,7 @@ Even if you don't plan to write code, there are many ways to contribute:
     npm run dev
     ```
 
-5.  Open [http://localhost:3000](http://localhost:3000) in your browser.
+5.  Open [http://localhost:3200](http://localhost:3200) in your browser.
 
 You're now ready to start coding!
 
