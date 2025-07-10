@@ -49,9 +49,27 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Load shared theme colors from mounted volume
+  let sharedThemeColors = {};
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const sharedTheme = require('/app/theme/tailwind.config.js');
+    if (sharedTheme?.theme?.extend?.colors) {
+      sharedThemeColors = sharedTheme.theme.extend.colors;
+      console.log('TweakCN: Loaded shared theme from volume');
+    }
+  } catch {
+    console.log('TweakCN: No shared theme found, using defaults');
+  }
+
   return (
     <html lang="en">
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__SHARED_THEME_COLORS__ = ${JSON.stringify(sharedThemeColors)};`,
+          }}
+        />
         <ThemeScript />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="icon" href="/favicon.ico" sizes="any" />

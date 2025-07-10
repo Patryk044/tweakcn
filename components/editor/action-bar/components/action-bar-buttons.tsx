@@ -11,6 +11,7 @@ import { SaveButton } from "./save-button";
 import { ShareButton } from "./share-button";
 import { ThemeToggle } from "./theme-toggle";
 import { UndoRedoButtons } from "./undo-redo-buttons";
+import { UploadToAppsButton } from "./upload-to-apps-button";
 import { useAIChatStore } from "@/store/ai-chat-store";
 
 interface ActionBarButtonsProps {
@@ -58,6 +59,7 @@ export function ActionBarButtons({
       )}
       <ShareButton onClick={() => onShareClick(themeState.preset)} disabled={aiGenerationLoading} />
       <SaveButton onClick={onSaveClick} isSaving={isSaving} disabled={aiGenerationLoading} />
+      <UploadToAppsButton disabled={aiGenerationLoading} />
       <CodeButton onClick={onCodeClick} disabled={aiGenerationLoading} />
     </div>
   );

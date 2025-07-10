@@ -1,0 +1,7 @@
+/* 
+ * Ten plik zastępuje import tailwindcss w globals.css
+ * Zawiera podstawowe dyrektywy Tailwind CSS
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
