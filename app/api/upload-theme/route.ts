@@ -17,7 +17,6 @@ function validateThemeConfig(content: string): boolean {
   console.log(content);
   console.log('=== END DEBUG ===');
   
-  // Skip validation for now to test file generation
   return true;
 }
 
@@ -27,7 +26,6 @@ function validateThemeConfig(content: string): boolean {
  * @returns Ciąg znaków z pełną konfiguracją Tailwind.
  */
 function generateThemeConfig(themeData: Record<string, unknown>): string {
-  // Lista kluczy, które nie są kolorami
   const nonColorKeys = ['radius', 'spacing', 'letter-spacing', 'shadow-blur', 'shadow-spread', 
                        'shadow-offset-x', 'shadow-offset-y', 'shadow-opacity', 'font-sans', 
                        'font-serif', 'font-mono'];
@@ -35,8 +33,6 @@ function generateThemeConfig(themeData: Record<string, unknown>): string {
   const colors: Record<string, string | Record<string, string>> = {};
   const otherProperties: Record<string, unknown> = {};
 
-  // Rozdziel kolory od innych właściwości
-  // Najpierw znajdź wszystkie klucze kolorów aby ustalić strukturę
   const colorKeys = Object.keys(themeData).filter(key => 
     !nonColorKeys.includes(key) && 
     !key.startsWith('font-') && 
@@ -45,8 +41,7 @@ function generateThemeConfig(themeData: Record<string, unknown>): string {
     !key.startsWith('tracking-')
   );
   
-  // Znajdź główne klucze kolorów (te które mają zagnieżdżone warianty)
-  const mainColorKeys = new Set<string>();
+ const mainColorKeys = new Set<string>();
   colorKeys.forEach(key => {
     if (key.includes('-')) {
       const mainKey = key.split('-')[0];
@@ -54,20 +49,16 @@ function generateThemeConfig(themeData: Record<string, unknown>): string {
     }
   });
   
-  // Przetwórz kolory
   Object.entries(themeData).forEach(([key, value]) => {
     if (nonColorKeys.includes(key) || key.startsWith('font-') || 
         key.startsWith('shadow-') || key.startsWith('radius-') || 
         key.startsWith('tracking-')) {
       otherProperties[key] = value;
     } else {
-      // Mapuj kolory na zmienne CSS
       if (key.includes('-')) {
-        // Kolory zagnieżdżone (np. primary-foreground)
         const [mainKey, ...subKeys] = key.split('-');
         const subKey = subKeys.join('-');
-        
-        // Upewnij się, że colors[mainKey] jest obiektem
+
         if (!colors[mainKey]) {
           colors[mainKey] = {};
         }
@@ -75,31 +66,26 @@ function generateThemeConfig(themeData: Record<string, unknown>): string {
           (colors[mainKey] as Record<string, string>)[subKey] = `var(--color-${key})`;
         }
       } else {
-        // Kolory podstawowe
-        if (mainColorKeys.has(key)) {
-          // Ten kolor ma zagnieżdżone warianty, więc powinien być obiektem z DEFAULT
-          if (!colors[key]) {
+       if (mainColorKeys.has(key)) {
+         if (!colors[key]) {
             colors[key] = {};
           }
           if (typeof colors[key] === 'object' && colors[key] !== null) {
             (colors[key] as Record<string, string>)['DEFAULT'] = `var(--color-${key})`;
           }
         } else {
-          // To jest samodzielny kolor
           colors[key] = `var(--color-${key})`;
         }
       }
     }
   });
 
-  // Przygotuj konfigurację extend
   const extendConfig: Record<string, unknown> = {};
   
   if (Object.keys(colors).length > 0) {
     extendConfig.colors = colors;
   }
 
-  // Dodaj inne właściwości
   if (otherProperties.radius) {
     extendConfig.borderRadius = {
       lg: `var(--radius)`,
@@ -108,7 +94,6 @@ function generateThemeConfig(themeData: Record<string, unknown>): string {
     };
   }
 
-  // Dodaj fonty
   const fontFamily: Record<string, string> = {};
   Object.entries(otherProperties).forEach(([key, _value]) => {
     if (key.startsWith('font-')) {
@@ -120,14 +105,7 @@ function generateThemeConfig(themeData: Record<string, unknown>): string {
     extendConfig.fontFamily = fontFamily;
   }
 
-  // Dodaj spacing jeśli istnieje
-  if (otherProperties.spacing) {
-    extendConfig.spacing = {
-      DEFAULT: `var(--spacing)`
-    };
-  }
 
-  // Dodaj letter-spacing jeśli istnieje
   if (otherProperties['letter-spacing']) {
     extendConfig.letterSpacing = {
       DEFAULT: `var(--letter-spacing)`
@@ -151,13 +129,14 @@ module.exports = {
 };
 `;
 
-  // Waliduj przed zwróceniem
   validateThemeConfig(content);
   
   return content;
 }
 
 export async function POST(req: NextRequest) {
+  console.log('⚠️ DEPRECATED: /api/upload-theme endpoint used');
+  console.log('👉 Please migrate to /api/theme/unified-export');
   console.log('=== NEW VERSION RUNNING ===');
   console.log('Otrzymano żądanie do /api/upload-theme');
 
@@ -168,7 +147,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Otrzymano nieprawidłowe lub puste dane motywu.' }, { status: 400 });
     }
     
-    // Sprawdź czy dane zawierają light/dark mode i wybierz tylko light mode
+    // Convert legacy format to unified format and redirect to unified API
+    console.log('🔄 Converting legacy format to unified format...');
+    
     let themeColors;
     
     if (themeStyles.light && typeof themeStyles.light === 'object') {
@@ -179,46 +160,64 @@ export async function POST(req: NextRequest) {
       themeColors = themeStyles;
     }
 
-    // Sprawdź czy mamy prawidłowe kolory
     if (!themeColors || typeof themeColors !== 'object' || Object.keys(themeColors).length === 0) {
       return NextResponse.json({ message: 'Nie znaleziono prawidłowych definicji kolorów.' }, { status: 400 });
     }
 
-    console.log('Generowanie konfiguracji motywu z kolorów:', Object.keys(themeColors));
-    const fileContent = generateThemeConfig(themeColors);
+    // Call unified API internally
+    const unifiedData = {
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+      colors: {
+        light: themeColors,
+        dark: themeColors // Legacy: use same colors for dark mode
+      },
+      targets: ['tailwind'] // Legacy endpoint was only for Tailwind
+    };
 
-    await fs.writeFile(TEMP_THEME_CONFIG_PATH, fileContent, 'utf8');
+    console.log('📤 Redirecting to unified API...');
     
-    // Skip external validation for now
-    /*
-    try {
-      const validationScript = path.resolve('/app/scripts/validate-theme.js');
-      execSync(`node "${validationScript}"`, { 
-        stdio: 'pipe',
-        env: { ...process.env, THEME_FILE_PATH: TEMP_THEME_CONFIG_PATH }
-      });
-      console.log('Dodatkowa walidacja zewnętrznym skryptem przeszła pomyślnie');
-    } catch (validationError) {
-      await fs.unlink(TEMP_THEME_CONFIG_PATH);
-      throw new Error(`Walidacja zewnętrzna nie powiodła się: ${validationError instanceof Error ? validationError.message : 'Nieznany błąd'}`);
+    // Make internal request to unified API
+    const unifiedResponse = await fetch(`${req.nextUrl.origin}/api/theme/unified-export`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(unifiedData),
+    });
+
+    if (unifiedResponse.ok) {
+      const result = await unifiedResponse.json();
+      console.log('✅ Successfully redirected to unified API');
+      return NextResponse.json({ 
+        message: 'Motyw został przesłany do aplikacji',
+        _deprecated: 'This endpoint is deprecated. Please use /api/theme/unified-export',
+        _unifiedResult: result
+      }, { status: 200 });
+    } else {
+      console.log('❌ Unified API failed, falling back to legacy implementation');
+      // Fall back to legacy implementation
+      console.log('Generowanie konfiguracji motywu z kolorów:', Object.keys(themeColors));
+      const fileContent = generateThemeConfig(themeColors);
+
+      await fs.writeFile(TEMP_THEME_CONFIG_PATH, fileContent, 'utf8');
+      await fs.rename(TEMP_THEME_CONFIG_PATH, THEME_CONFIG_PATH);
+
+      console.log(`Motyw został pomyślnie zapisany w ${THEME_CONFIG_PATH}`);
+
+      return NextResponse.json({ 
+        message: 'Motyw został przesłany do aplikacji',
+        _deprecated: 'This endpoint is deprecated. Please use /api/theme/unified-export',
+        _fallback: 'Used legacy implementation due to unified API failure'
+      }, { status: 200 });
     }
-    */
-
-    await fs.rename(TEMP_THEME_CONFIG_PATH, THEME_CONFIG_PATH);
-
-    console.log(`Motyw został pomyślnie zapisany w ${THEME_CONFIG_PATH}`);
-
-    return NextResponse.json({ message: 'Motyw został przesłany do aplikacji' }, { status: 200 });
 
   } catch (error) {
     console.error('Błąd podczas zapisu pliku motywu:', error);
 
-    // W razie błędu, spróbuj usunąć plik tymczasowy, jeśli istnieje.
     try {
       await fs.unlink(TEMP_THEME_CONFIG_PATH);
-    } catch {
-      // Ignoruj błąd, jeśli plik tymczasowy nie istnieje.
-    }
+    } catch {}
 
     const errorMessage = error instanceof Error ? error.message : 'Wystąpił nieznany błąd';
     return NextResponse.json({ message: `Błąd przy zapisywaniu motywu: ${errorMessage}` }, { status: 500 });

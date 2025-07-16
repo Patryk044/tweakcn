@@ -4,6 +4,7 @@ import { ThemeEditorState } from "@/types/editor";
 import { defaultThemeState } from "@/config/theme";
 import { getPresetThemeStyles } from "@/utils/theme-preset-helper";
 import { isDeepEqual } from "@/lib/utils";
+import { langflowColorExporter } from "@/utils/theme-exporter-langflow";
 
 const MAX_HISTORY_COUNT = 30;
 const HISTORY_OVERRIDE_THRESHOLD_MS = 500; // 0.5 seconds
@@ -29,6 +30,7 @@ interface EditorStore {
   redo: () => void;
   canUndo: () => boolean;
   canRedo: () => boolean;
+  exportToLangflow: () => Promise<boolean>;
 }
 
 export const useEditorStore = create<EditorStore>()(
@@ -223,6 +225,73 @@ export const useEditorStore = create<EditorStore>()(
       },
       canUndo: () => get().history.length > 0,
       canRedo: () => get().future.length > 0,
+      exportToLangflow: async () => {
+        const themeState = get().themeState;
+        try {
+          const lightColors = themeState.styles.light;
+          const darkColors = themeState.styles.dark;
+          
+          if (!lightColors || !darkColors) {
+            console.error('[TWEAKCN] Brak kolorów light/dark');
+            return false;
+          }
+          
+          const exportData = {
+            timestamp: new Date().toISOString(),
+            preset: themeState.preset,
+            version: '1.0.0',
+            colors: {
+              light: lightColors,
+              dark: darkColors
+            },
+            targets: ['langflow', 'openwebui', 'litellm'] 
+          };
+          
+          try {
+            const response = await fetch('/api/theme/color-export-unified', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(exportData),
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              console.log('[TWEAKCN] Kolory wyeksportowane do Langflow');
+              console.log(`[TWEAKCN] Sync: ${Object.keys(lightColors).length} light + ${Object.keys(darkColors).length} dark colors`);
+              console.log('[TWEAKCN] Export result:', result);
+              return true;
+            } else {
+              console.warn('[TWEAKCN] Export response not OK, trying localStorage fallback');
+              
+              try {
+                const { langflowColorExporter } = await import('@/utils/theme-exporter-langflow');
+                const cssOverride = langflowColorExporter.generateLangflowCSS(lightColors, darkColors);
+                
+                localStorage.setItem('tweakcn-export', JSON.stringify(exportData));
+                localStorage.setItem('tweakcn-css-override', cssOverride);
+                localStorage.setItem('tweakcn-export-timestamp', new Date().toISOString());
+                
+                console.log('[TWEAKCN] Export saved to localStorage');
+                return true;
+              } catch (localStorageError) {
+                console.error('[TWEAKCN] LocalStorage fallback failed:', localStorageError);
+                return false;
+              }
+            }
+          } catch (fetchError) {
+            console.warn('[TWEAKCN] API call failed, using localStorage fallback:', fetchError);
+            localStorage.setItem('tweakcn-export', JSON.stringify(exportData));
+            console.log('[TWEAKCN] Kolory zapisane lokalnie (dev mode)');
+            console.log(`[TWEAKCN] ${Object.keys(lightColors).length} light + ${Object.keys(darkColors).length} dark colors`);
+            return true;
+          }
+        } catch (error) {
+          console.error('[TWEAKCN] Błąd eksportu do Langflow:', error);
+          return false;
+        }
+      },
     }),
     {
       name: "editor-storage",

@@ -18,33 +18,70 @@ export function UploadToAppsButton({ disabled }: UploadToAppsButtonProps) {
     try {
       setIsUploading(true);
       
-      const colors = themeState.styles.light;
+      const lightColors = themeState.styles.light;
+      const darkColors = themeState.styles.dark;
       
-      if (!colors || typeof colors !== 'object') {
-        throw new Error('Brak prawidłowych kolorów do przesłania');
+      if (!lightColors || typeof lightColors !== 'object') {
+        throw new Error('Brak prawidłowych kolorów jasnych do przesłania');
       }
       
-       console.log('Wysyłanie kolorów do API:', Object.keys(colors).length, 'kolorów');
+      if (!darkColors || typeof darkColors !== 'object') {
+        throw new Error('Brak prawidłowych kolorów ciemnych do przesłania');
+      }
       
-      const response = await fetch('/api/upload-theme', {
+      console.log('[UPLOAD-TO-APPS] Eksportowanie do wszystkich aplikacji:');
+      console.log(`[UPLOAD-TO-APPS] ${Object.keys(lightColors).length} light + ${Object.keys(darkColors).length} dark colors`);
+      
+      const exportData = {
+        timestamp: new Date().toISOString(),
+        preset: themeState.preset,
+        version: '1.0.0',
+        colors: {
+          light: lightColors,
+          dark: darkColors
+        },
+        targets: ['all']
+      };
+      
+      const response = await fetch('/api/theme/color-export-unified', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(colors),
+        body: JSON.stringify(exportData),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to upload theme: ${errorText}`);
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to upload theme: ${response.status}`);
       }
-
-      toast({
-        title: "Motyw został przesłany do aplikacji",
-        description: "Wszystkie aplikacje teraz używają nowego motywu",
-      });
+      
+      const result = await response.json();
+      
+      console.log('[UPLOAD-TO-APPS] Export results:', result.results);
+      
+      if (result.success) {
+        toast({
+          title: "Motyw przesłany do wszystkich aplikacji",
+          description: `Sukces dla: ${result.targets.join(', ')}. Wszystkie aplikacje używają nowego motywu.`,
+        });
+      } else {
+        const successTargets = Object.entries(result.results)
+          .filter(([, success]) => success)
+          .map(([target]) => target);
+        
+        const failedTargets = Object.entries(result.results)
+          .filter(([, success]) => !success)
+          .map(([target]) => target);
+        
+        toast({
+          title: "Częściowy sukces eksportu",
+          description: `Sukces: ${successTargets.join(', ')}. Błędy: ${failedTargets.join(', ')}.`,
+          variant: "default",
+        });
+      }
     } catch (error) {
-      console.error('Error uploading theme:', error);
+      console.error('[UPLOAD-TO-APPS] Export error:', error);
       toast({
         title: "Błąd przy przesyłaniu motywu",
         description: error instanceof Error ? error.message : "Nieznany błąd",
@@ -63,7 +100,7 @@ export function UploadToAppsButton({ disabled }: UploadToAppsButtonProps) {
       className="gap-2"
     >
       <Upload className="h-4 w-4" />
-      {isUploading ? "Przesyłanie..." : "Upload to apps"}
+      {isUploading ? "Eksportowanie..." : "Export to all apps"}
     </Button>
   );
 }

@@ -95,10 +95,6 @@ const generateThemeVariables = (
   const shadowVars = generateShadowVariables(
     getShadowMap({ styles: themeStyles, currentMode: mode })
   );
-  const spacingVar =
-    mode === "light"
-      ? `\n  --spacing: ${themeStyles["light"].spacing ?? defaultLightThemeStyles.spacing};`
-      : "";
 
   const trackingVars =
     mode === "light"
@@ -113,7 +109,6 @@ const generateThemeVariables = (
     radiusVar +
     shadowVars +
     trackingVars +
-    spacingVar +
     "\n}"
   );
 };
