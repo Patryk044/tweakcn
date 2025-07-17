@@ -6,10 +6,10 @@ const THEME_CONFIG_PATH = path.resolve('/app/theme/tailwind.config.js');
 const TEMP_THEME_CONFIG_PATH = path.resolve('/app/theme/tailwind.config.js.tmp');
 
 /**
- * Waliduje poprawność składni JavaScript i struktury konfiguracji Tailwind.
- * @param content - Zawartość pliku do walidacji.
- * @returns true jeśli walidacja przeszła pomyślnie.
- * @throws Error jeśli walidacja się nie powiodła.
+ * Validates the correctness of Tailwind's JavaScript syntax and configuration structure.
+ * @param content - The content of the file to validate.
+ * @returns true if the validation passed successfully.
+ * @throws Error if the validation failed.
  */
 
 function validateThemeConfig(content: string): boolean {
@@ -21,9 +21,9 @@ function validateThemeConfig(content: string): boolean {
 }
 
 /**
- * Generuje zawartość pliku tailwind.config.js na podstawie otrzymanych danych tematu.
- * @param themeData - Dane tematu (kolory i właściwości).
- * @returns Ciąg znaków z pełną konfiguracją Tailwind.
+ * Generates the contents of the tailwind.config.js file based on the received subject data.
+ * @param themeData - Subject data (colors and properties).
+ * @returns A string with the full Tailwind configuration.
  */
 function generateThemeConfig(themeData: Record<string, unknown>): string {
   const nonColorKeys = ['radius', 'spacing', 'letter-spacing', 'shadow-blur', 'shadow-spread', 
@@ -117,9 +117,9 @@ function generateThemeConfig(themeData: Record<string, unknown>): string {
   const content = `/**
  * @type {import('tailwindcss').Config}
  *
- * UWAGA: Ten plik jest generowany automatycznie przez aplikację Tweakcn.
- * Nie edytuj go ręcznie, ponieważ zmiany zostaną nadpisane.
- * Ostatnia aktualizacja: ${new Date().toISOString()}
+ * NOTE: This file is generated automatically by the Tweakcn application.
+ * Do not edit it manually, as changes will be overwritten.
+ * Last updated: ${new Date().toISOString()}
  */
 module.exports = {
   theme: {
@@ -135,28 +135,27 @@ module.exports = {
 }
 
 export async function POST(req: NextRequest) {
-  console.log('⚠️ DEPRECATED: /api/upload-theme endpoint used');
-  console.log('👉 Please migrate to /api/theme/unified-export');
+  console.log('DEPRECATED: /api/upload-theme endpoint used');
+  console.log('Please migrate to /api/theme/unified-export');
   console.log('=== NEW VERSION RUNNING ===');
-  console.log('Otrzymano żądanie do /api/upload-theme');
+  console.log('Received request to /api/upload-theme');
 
   try {
     const themeStyles = await req.json();
 
     if (!themeStyles || typeof themeStyles !== 'object' || Object.keys(themeStyles).length === 0) {
-      return NextResponse.json({ message: 'Otrzymano nieprawidłowe lub puste dane motywu.' }, { status: 400 });
+      return NextResponse.json({ message: 'Invalid or empty motif data was received.' }, { status: 400 });
     }
     
-    // Convert legacy format to unified format and redirect to unified API
-    console.log('🔄 Converting legacy format to unified format...');
+    console.log('Converting legacy format to unified format...');
     
     let themeColors;
     
     if (themeStyles.light && typeof themeStyles.light === 'object') {
-      console.log('Wykryto strukturę z trybami light/dark, używam tylko light mode');
+      console.log('Detected light/dark mode structure, using only light mode');
       themeColors = themeStyles.light;
     } else {
-      console.log('Używam przekazanej struktury kolorów bezpośrednio');
+      console.log('Using provided color structure directly');
       themeColors = themeStyles;
     }
 
@@ -164,20 +163,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Nie znaleziono prawidłowych definicji kolorów.' }, { status: 400 });
     }
 
-    // Call unified API internally
     const unifiedData = {
       timestamp: new Date().toISOString(),
       version: '1.0.0',
       colors: {
         light: themeColors,
-        dark: themeColors // Legacy: use same colors for dark mode
+        dark: themeColors
       },
-      targets: ['tailwind'] // Legacy endpoint was only for Tailwind
+      targets: ['tailwind']
     };
 
-    console.log('📤 Redirecting to unified API...');
+    console.log('Redirecting to unified API...');
     
-    // Make internal request to unified API
     const unifiedResponse = await fetch(`${req.nextUrl.origin}/api/theme/unified-export`, {
       method: 'POST',
       headers: {
@@ -188,38 +185,37 @@ export async function POST(req: NextRequest) {
 
     if (unifiedResponse.ok) {
       const result = await unifiedResponse.json();
-      console.log('✅ Successfully redirected to unified API');
+      console.log('Successfully redirected to unified API');
       return NextResponse.json({ 
-        message: 'Motyw został przesłany do aplikacji',
+        message: 'The theme has been uploaded to the application',
         _deprecated: 'This endpoint is deprecated. Please use /api/theme/unified-export',
         _unifiedResult: result
       }, { status: 200 });
     } else {
-      console.log('❌ Unified API failed, falling back to legacy implementation');
-      // Fall back to legacy implementation
-      console.log('Generowanie konfiguracji motywu z kolorów:', Object.keys(themeColors));
+      console.log('Unified API failed, falling back to legacy implementation');
+      console.log('Generating theme configuration from colors:', Object.keys(themeColors));
       const fileContent = generateThemeConfig(themeColors);
 
       await fs.writeFile(TEMP_THEME_CONFIG_PATH, fileContent, 'utf8');
       await fs.rename(TEMP_THEME_CONFIG_PATH, THEME_CONFIG_PATH);
 
-      console.log(`Motyw został pomyślnie zapisany w ${THEME_CONFIG_PATH}`);
+      console.log(`The theme has been successfully saved to ${THEME_CONFIG_PATH}`);
 
       return NextResponse.json({ 
-        message: 'Motyw został przesłany do aplikacji',
+        message: 'The theme has been uploaded to the application',
         _deprecated: 'This endpoint is deprecated. Please use /api/theme/unified-export',
         _fallback: 'Used legacy implementation due to unified API failure'
       }, { status: 200 });
     }
 
   } catch (error) {
-    console.error('Błąd podczas zapisu pliku motywu:', error);
+    console.error('Error saving theme file:', error);
 
     try {
       await fs.unlink(TEMP_THEME_CONFIG_PATH);
     } catch {}
 
-    const errorMessage = error instanceof Error ? error.message : 'Wystąpił nieznany błąd';
-    return NextResponse.json({ message: `Błąd przy zapisywaniu motywu: ${errorMessage}` }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    return NextResponse.json({ message: `Error saving theme: ${errorMessage}` }, { status: 500 });
   }
 }

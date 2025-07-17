@@ -132,13 +132,13 @@ function generateTailwindConfig(lightColors: Record<string, string>): string {
   const content = `/**
  * @type {import('tailwindcss').Config}
  *
- * UWAGA: Ten plik jest generowany automatycznie przez Unified Theme Export API.
- * Nie edytuj go ręcznie, ponieważ zmiany zostaną nadpisane.
- * Ostatnia aktualizacja: ${new Date().toISOString()}
- * 
+ * NOTE: This file is generated automatically by Unified Theme Export API.
+ * Do not edit it manually, as changes will be overwritten.
+ * Last updated: ${new Date().toISOString()}
+ *
  * System: Unified Theme Export
- * Źródło: tweakcn editor
- * Cele: ${lightColors ? 'Tailwind Config' : 'Unknown'}
+ * Source: tweakcn editor
+ * Purpose: ${lightColors ? 'Tailwind Config' : 'Unknown'}
  */
 module.exports = {
   theme: {
@@ -190,16 +190,13 @@ async function exportToOpenWebUI(data: UnifiedThemeData): Promise<boolean> {
     const { openWebUIColorExporter } = await import('@/utils/theme-exporter-openwebui');
     const cssOverride = openWebUIColorExporter.generateOpenWebUICSS(data.colors.light, data.colors.dark);
     
-    // Ensure output directory exists for the main output
     const outputDir = path.join(THEME_DIR, 'output');
     if (!existsSync(outputDir)) {
       await mkdir(outputDir, { recursive: true });
     }
     
-    // Primary location: output directory (this is what OpenWebUI container should read)
     const cssOutputPath = path.join(outputDir, 'openwebui-override.css');
     
-    // Secondary location: root theme dir for backward compatibility
     const cssOverridePath = path.join(THEME_DIR, 'openwebui-override.css');
 
     await writeFile(cssOutputPath, cssOverride);
