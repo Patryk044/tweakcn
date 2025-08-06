@@ -247,6 +247,41 @@ async function exportToTailwind(data: UnifiedThemeData): Promise<boolean> {
   }
 }
 
+async function exportToLiteLLM(data: UnifiedThemeData): Promise<boolean> {
+  try {
+    if (!existsSync(THEME_DIR)) {
+      await mkdir(THEME_DIR, { recursive: true });
+    }
+    
+    const { litellmColorExporter } = await import('@/utils/theme-exporter-litellm');
+    
+    // Generate CSS override
+    const cssOverride = litellmColorExporter.generateLiteLLMCSS(data.colors.light, data.colors.dark);
+    const cssOverridePath = path.join(THEME_DIR, 'litellm-override.css');
+    await writeFile(cssOverridePath, cssOverride);
+    
+    // Generate JSON UI colors
+    const jsonData = litellmColorExporter.generateLiteLLMJson(data.colors.light);
+    const jsonPath = path.join(THEME_DIR, 'litellm-ui-colors.json');
+    await writeFile(jsonPath, jsonData);
+    
+    // Create signal file
+    const timestamp = Date.now();
+    const signalPath = path.join(THEME_DIR, 'litellm-theme-changed.signal');
+    await writeFile(signalPath, timestamp.toString());
+    
+    console.log('[UNIFIED-API] LiteLLM CSS override saved to:', cssOverridePath);
+    console.log('[UNIFIED-API] LiteLLM UI colors JSON saved to:', jsonPath);
+    console.log('[UNIFIED-API] LiteLLM theme change signal created');
+    console.log(`[UNIFIED-API] LiteLLM colors: ${Object.keys(data.colors.light).length} light + ${Object.keys(data.colors.dark).length} dark`);
+    
+    return true;
+  } catch (error) {
+    console.error('[UNIFIED-API] LiteLLM export error:', error);
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   console.log('[UNIFIED-API] Unified Theme Export request received');
   
@@ -272,7 +307,7 @@ export async function POST(request: NextRequest) {
       
       const results: Record<string, boolean> = {};
       const targetList = legacyData.targets.includes('all') 
-        ? ['langflow', 'openwebui', 'tailwind'] 
+        ? ['langflow', 'openwebui', 'tailwind', 'litellm'] 
         : legacyData.targets;
       
       for (const target of targetList) {
@@ -282,6 +317,9 @@ export async function POST(request: NextRequest) {
             break;
           case 'openwebui':
             results.openwebui = await exportToOpenWebUI(legacyData);
+            break;
+          case 'litellm':
+            results.litellm = await exportToLiteLLM(legacyData);
             break;
           case 'tailwind':
             results.tailwind = await exportToTailwind(legacyData);
@@ -338,7 +376,7 @@ export async function POST(request: NextRequest) {
     
     const results: Record<string, boolean> = {};
     const targetList = data.targets.includes('all') 
-      ? ['langflow', 'openwebui', 'tailwind'] 
+      ? ['langflow', 'openwebui', 'tailwind', 'litellm'] 
       : data.targets;
     
     for (const target of targetList) {
@@ -351,6 +389,9 @@ export async function POST(request: NextRequest) {
           break;
         case 'tailwind':
           results.tailwind = await exportToTailwind(data);
+          break;
+        case 'litellm':
+          results.litellm = await exportToLiteLLM(data);
           break;
         default:
           console.warn(`[UNIFIED-API] Unknown target: ${target}`);
