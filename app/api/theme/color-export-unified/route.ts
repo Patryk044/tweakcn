@@ -3,7 +3,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 
-const THEME_DIR = '/app/theme';
+const THEME_DIR = process.env.TWEAKCN_THEME_DIR || '/app/theme';
 const CONFIG_FILE = path.join(THEME_DIR, 'tweakcn-config.json');
 const TAILWIND_CONFIG_PATH = path.resolve('/app/theme/tailwind.config.js');
 const TEMP_TAILWIND_CONFIG_PATH = path.resolve('/app/theme/tailwind.config.js.tmp');
@@ -21,24 +21,13 @@ interface UnifiedThemeData {
 
 
 function validateThemeData(data: unknown): data is UnifiedThemeData {
-  return (
-    data &&
-    typeof data === 'object' &&
-    data !== null &&
-    'colors' in data &&
-    data.colors &&
-    typeof data.colors === 'object' &&
-    data.colors !== null &&
-    'light' in data.colors &&
-    data.colors.light &&
-    typeof data.colors.light === 'object' &&
-    'dark' in data.colors &&
-    data.colors.dark &&
-    typeof data.colors.dark === 'object' &&
-    'targets' in data &&
-    Array.isArray(data.targets) &&
-    data.targets.length > 0
-  );
+  if (typeof data !== 'object' || data === null) return false;
+  const d = data as any;
+  if (!d.colors || typeof d.colors !== 'object') return false;
+  if (!d.colors.light || typeof d.colors.light !== 'object') return false;
+  if (!d.colors.dark || typeof d.colors.dark !== 'object') return false;
+  if (!Array.isArray(d.targets) || d.targets.length === 0) return false;
+  return true;
 }
 
 function generateTailwindConfig(lightColors: Record<string, string>): string {
@@ -282,6 +271,40 @@ async function exportToLiteLLM(data: UnifiedThemeData): Promise<boolean> {
   }
 }
 
+async function exportToDashy(data: UnifiedThemeData): Promise<boolean> {
+  try {
+    if (!existsSync(THEME_DIR)) {
+      await mkdir(THEME_DIR, { recursive: true });
+    }
+    const { dashyColorExporter } = await import('../../../../utils/theme-exporter-dashy');
+    const darkModeStrategy = (data as any).dashyDarkStrategy === 'class' ? 'class' : 'media';
+    const cssOverride = dashyColorExporter.generateDashyCSS(data.colors.light, data.colors.dark, { darkModeStrategy });
+    const yamlSnippet = dashyColorExporter.generateDashyYAML(data.colors.light, data.colors.dark);
+
+    const cssPath = path.join(THEME_DIR, 'dashy-override.css');
+    const yamlPath = path.join(THEME_DIR, 'dashy-theme-snippet.yml');
+    const tmpCss = cssPath + '.tmp';
+    const tmpYaml = yamlPath + '.tmp';
+
+    await writeFile(tmpCss, cssOverride, 'utf8');
+    await writeFile(tmpYaml, yamlSnippet, 'utf8');
+    await writeFile(cssPath, cssOverride, 'utf8');
+    await writeFile(yamlPath, yamlSnippet, 'utf8');
+
+    try { await writeFile(tmpCss, '', 'utf8'); } catch {}
+    try { await writeFile(tmpYaml, '', 'utf8'); } catch {}
+
+    const timestamp = Date.now();
+    const signalPath = path.join(THEME_DIR, 'dashy-theme-changed.signal');
+    await writeFile(signalPath, timestamp.toString());
+    console.log('[UNIFIED-API] Dashy CSS + YAML override saved');
+    return true;
+  } catch (error) {
+    console.error('[UNIFIED-API] Dashy export error:', error);
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   console.log('[UNIFIED-API] Unified Theme Export request received');
   
@@ -307,7 +330,7 @@ export async function POST(request: NextRequest) {
       
       const results: Record<string, boolean> = {};
       const targetList = legacyData.targets.includes('all') 
-        ? ['langflow', 'openwebui', 'tailwind', 'litellm'] 
+        ? ['langflow', 'openwebui', 'tailwind', 'litellm', 'dashy'] 
         : legacyData.targets;
       
       for (const target of targetList) {
@@ -323,6 +346,9 @@ export async function POST(request: NextRequest) {
             break;
           case 'tailwind':
             results.tailwind = await exportToTailwind(legacyData);
+            break;
+          case 'dashy':
+            results.dashy = await exportToDashy(legacyData);
             break;
           default:
             console.warn(`[UNIFIED-API] Unknown target: ${target}`);
@@ -376,7 +402,7 @@ export async function POST(request: NextRequest) {
     
     const results: Record<string, boolean> = {};
     const targetList = data.targets.includes('all') 
-      ? ['langflow', 'openwebui', 'tailwind', 'litellm'] 
+      ? ['langflow', 'openwebui', 'tailwind', 'litellm', 'dashy'] 
       : data.targets;
     
     for (const target of targetList) {
@@ -392,6 +418,9 @@ export async function POST(request: NextRequest) {
           break;
         case 'litellm':
           results.litellm = await exportToLiteLLM(data);
+          break;
+        case 'dashy':
+          results.dashy = await exportToDashy(data);
           break;
         default:
           console.warn(`[UNIFIED-API] Unknown target: ${target}`);
@@ -446,7 +475,7 @@ export async function GET() {
     endpoints: {
       POST: 'Export theme to multiple targets',
     },
-    supportedTargets: ['langflow', 'openwebui', 'tailwind', 'all'],
+    supportedTargets: ['langflow', 'openwebui', 'tailwind', 'litellm', 'dashy', 'all'],
     formats: {
       unified: {
         colors: { light: {}, dark: {} },

@@ -244,7 +244,7 @@ export const useEditorStore = create<EditorStore>()(
               light: lightColors,
               dark: darkColors
             },
-            targets: ['langflow', 'openwebui', 'litellm'] 
+            targets: ['langflow', 'openwebui', 'litellm', 'dashy', 'tailwind'] 
           };
           
           try {
