@@ -17,16 +17,23 @@ interface UnifiedThemeData {
     dark: Record<string, string>;
   };
   targets: string[];
+  dashyDarkStrategy?: 'class' | 'media';
 }
-
 
 function validateThemeData(data: unknown): data is UnifiedThemeData {
   if (typeof data !== 'object' || data === null) return false;
-  const d = data as any;
-  if (!d.colors || typeof d.colors !== 'object') return false;
-  if (!d.colors.light || typeof d.colors.light !== 'object') return false;
-  if (!d.colors.dark || typeof d.colors.dark !== 'object') return false;
-  if (!Array.isArray(d.targets) || d.targets.length === 0) return false;
+  const d = data as Record<string, unknown>;
+
+  if (!('colors' in d) || typeof d.colors !== 'object' || d.colors === null) return false;
+  const colors = d.colors as Record<string, unknown>;
+  if (!('light' in colors) || typeof colors.light !== 'object' || colors.light === null) return false;
+  if (!('dark' in colors) || typeof colors.dark !== 'object' || colors.dark === null) return false;
+
+  if (!('targets' in d) || !Array.isArray(d.targets) || d.targets.length === 0) return false;
+
+  if (!('timestamp' in d) || typeof d.timestamp !== 'string') return false;
+  if (!('version' in d) || typeof d.version !== 'string') return false;
+
   return true;
 }
 
@@ -131,7 +138,7 @@ function generateTailwindConfig(lightColors: Record<string, string>): string {
  */
 module.exports = {
   theme: {
-    extend: ${prettyExtendConfig.replace(/"var\(([^"]+)\)"/g, '"var($1)"')},
+    extend: ${prettyExtendConfig.replace(/"var\(([^\"]+?)\)"/g, '"var($1)"')},
   },
   plugins: [],
 };
@@ -277,7 +284,7 @@ async function exportToDashy(data: UnifiedThemeData): Promise<boolean> {
       await mkdir(THEME_DIR, { recursive: true });
     }
     const { dashyColorExporter } = await import('../../../../utils/theme-exporter-dashy');
-    const darkModeStrategy = (data as any).dashyDarkStrategy === 'class' ? 'class' : 'media';
+    const darkModeStrategy: 'class' | 'media' = data.dashyDarkStrategy === 'class' ? 'class' : 'media';
     const cssOverride = dashyColorExporter.generateDashyCSS(data.colors.light, data.colors.dark, { darkModeStrategy });
     const yamlSnippet = dashyColorExporter.generateDashyYAML(data.colors.light, data.colors.dark);
 
@@ -309,17 +316,18 @@ export async function POST(request: NextRequest) {
   console.log('[UNIFIED-API] Unified Theme Export request received');
   
   try {
-    const data = await request.json();
+    const rawData: unknown = await request.json();
     
-    if (!data.colors && !data.targets) {
+    // Legacy format: plain colors object (no colors/targets keys)
+    if (typeof rawData === 'object' && rawData !== null && !('colors' in rawData) && !('targets' in rawData)) {
       console.log('[UNIFIED-API] Converting legacy format to unified format');
-      
-      const legacyData = {
+      const legacyColors = rawData as Record<string, string>;
+      const legacyData: UnifiedThemeData = {
         timestamp: new Date().toISOString(),
         version: '1.0.0',
         colors: {
-          light: data,
-          dark: data 
+          light: legacyColors,
+          dark: legacyColors 
         },
         targets: ['all']
       };
@@ -386,7 +394,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!validateThemeData(data)) {
+    if (!validateThemeData(rawData)) {
       return NextResponse.json({ 
         error: 'Invalid theme data structure',
         expected: {
@@ -395,6 +403,8 @@ export async function POST(request: NextRequest) {
         }
       }, { status: 400 });
     }
+
+    const data = rawData; // now narrowed by type guard
     
     console.log(`[UNIFIED-API] Export targets: ${data.targets.join(', ')}`);
     console.log(`[UNIFIED-API] Light colors: ${Object.keys(data.colors.light).length}`);
