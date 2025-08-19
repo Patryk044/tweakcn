@@ -287,24 +287,30 @@ async function exportToDashy(data: UnifiedThemeData): Promise<boolean> {
     const darkModeStrategy: 'class' | 'media' = data.dashyDarkStrategy === 'class' ? 'class' : 'media';
     const cssOverride = dashyColorExporter.generateDashyCSS(data.colors.light, data.colors.dark, { darkModeStrategy });
     const yamlSnippet = dashyColorExporter.generateDashyYAML(data.colors.light, data.colors.dark);
+    const scssTheme = dashyColorExporter.generateUserDefinedThemesSCSS(data.colors.light, data.colors.dark);
 
     const cssPath = path.join(THEME_DIR, 'dashy-override.css');
     const yamlPath = path.join(THEME_DIR, 'dashy-theme-snippet.yml');
+    const scssPath = path.join(THEME_DIR, 'user-defined-themes.scss');
     const tmpCss = cssPath + '.tmp';
     const tmpYaml = yamlPath + '.tmp';
+    const tmpScss = scssPath + '.tmp';
 
     await writeFile(tmpCss, cssOverride, 'utf8');
     await writeFile(tmpYaml, yamlSnippet, 'utf8');
+    await writeFile(tmpScss, scssTheme, 'utf8');
     await writeFile(cssPath, cssOverride, 'utf8');
     await writeFile(yamlPath, yamlSnippet, 'utf8');
+    await writeFile(scssPath, scssTheme, 'utf8');
 
     try { await writeFile(tmpCss, '', 'utf8'); } catch {}
     try { await writeFile(tmpYaml, '', 'utf8'); } catch {}
+    try { await writeFile(tmpScss, '', 'utf8'); } catch {}
 
     const timestamp = Date.now();
     const signalPath = path.join(THEME_DIR, 'dashy-theme-changed.signal');
     await writeFile(signalPath, timestamp.toString());
-    console.log('[UNIFIED-API] Dashy CSS + YAML override saved');
+    console.log('[UNIFIED-API] Dashy CSS + YAML + SCSS override saved');
     return true;
   } catch (error) {
     console.error('[UNIFIED-API] Dashy export error:', error);
