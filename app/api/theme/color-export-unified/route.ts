@@ -311,6 +311,32 @@ async function exportToDashy(data: UnifiedThemeData): Promise<boolean> {
     const signalPath = path.join(THEME_DIR, 'dashy-theme-changed.signal');
     await writeFile(signalPath, timestamp.toString());
     console.log('[UNIFIED-API] Dashy CSS + YAML + SCSS override saved');
+    
+    try {
+      console.log('[UNIFIED-API] Triggering Dashy integration webhook...');
+      
+      const webhookUrl = 'http://localhost:3200/api/webhook/dashy-integration';
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          trigger: 'theme-export',
+          timestamp: timestamp
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[UNIFIED-API] Dashy integration webhook triggered successfully:', result.message);
+      } else {
+        console.warn('[UNIFIED-API] Dashy integration webhook failed:', response.statusText);
+      }
+    } catch (webhookError) {
+      console.warn('[UNIFIED-API] Failed to trigger Dashy integration webhook:', webhookError);
+    }
+    
     return true;
   } catch (error) {
     console.error('[UNIFIED-API] Dashy export error:', error);
@@ -324,7 +350,6 @@ export async function POST(request: NextRequest) {
   try {
     const rawData: unknown = await request.json();
     
-    // Legacy format: plain colors object (no colors/targets keys)
     if (typeof rawData === 'object' && rawData !== null && !('colors' in rawData) && !('targets' in rawData)) {
       console.log('[UNIFIED-API] Converting legacy format to unified format');
       const legacyColors = rawData as Record<string, string>;
@@ -410,7 +435,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const data = rawData; // now narrowed by type guard
+    const data = rawData;
     
     console.log(`[UNIFIED-API] Export targets: ${data.targets.join(', ')}`);
     console.log(`[UNIFIED-API] Light colors: ${Object.keys(data.colors.light).length}`);
