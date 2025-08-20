@@ -311,32 +311,6 @@ async function exportToDashy(data: UnifiedThemeData): Promise<boolean> {
     const signalPath = path.join(THEME_DIR, 'dashy-theme-changed.signal');
     await writeFile(signalPath, timestamp.toString());
     console.log('[UNIFIED-API] Dashy CSS + YAML + SCSS override saved');
-    
-    try {
-      console.log('[UNIFIED-API] Triggering Dashy integration webhook...');
-      
-      const webhookUrl = 'http://localhost:3200/api/webhook/dashy-integration';
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          trigger: 'theme-export',
-          timestamp: timestamp
-        })
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        console.log('[UNIFIED-API] Dashy integration webhook triggered successfully:', result.message);
-      } else {
-        console.warn('[UNIFIED-API] Dashy integration webhook failed:', response.statusText);
-      }
-    } catch (webhookError) {
-      console.warn('[UNIFIED-API] Failed to trigger Dashy integration webhook:', webhookError);
-    }
-    
     return true;
   } catch (error) {
     console.error('[UNIFIED-API] Dashy export error:', error);
