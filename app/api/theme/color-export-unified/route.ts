@@ -251,21 +251,23 @@ async function exportToLiteLLM(data: UnifiedThemeData): Promise<boolean> {
     
     const { litellmColorExporter } = await import('@/utils/theme-exporter-litellm');
     
-    // Generate CSS override
     const cssOverride = litellmColorExporter.generateLiteLLMCSS(data.colors.light, data.colors.dark);
+    
+    const globalsPath = path.join(THEME_DIR, 'litellm-globals.css');
+    await writeFile(globalsPath, cssOverride);
+    
     const cssOverridePath = path.join(THEME_DIR, 'litellm-override.css');
     await writeFile(cssOverridePath, cssOverride);
     
-    // Generate JSON UI colors
     const jsonData = litellmColorExporter.generateLiteLLMJson(data.colors.light);
     const jsonPath = path.join(THEME_DIR, 'litellm-ui-colors.json');
     await writeFile(jsonPath, jsonData);
     
-    // Create signal file
     const timestamp = Date.now();
     const signalPath = path.join(THEME_DIR, 'litellm-theme-changed.signal');
     await writeFile(signalPath, timestamp.toString());
     
+    console.log('[UNIFIED-API] LiteLLM globals.css saved to:', globalsPath);
     console.log('[UNIFIED-API] LiteLLM CSS override saved to:', cssOverridePath);
     console.log('[UNIFIED-API] LiteLLM UI colors JSON saved to:', jsonPath);
     console.log('[UNIFIED-API] LiteLLM theme change signal created');
@@ -283,7 +285,7 @@ async function exportToDashy(data: UnifiedThemeData): Promise<boolean> {
     if (!existsSync(THEME_DIR)) {
       await mkdir(THEME_DIR, { recursive: true });
     }
-    const { dashyColorExporter } = await import('../../../../utils/theme-exporter-dashy');
+    const { dashyColorExporter } = await import('@/utils/theme-exporter-dashy');
     const darkModeStrategy: 'class' | 'media' = data.dashyDarkStrategy === 'class' ? 'class' : 'media';
     const cssOverride = dashyColorExporter.generateDashyCSS(data.colors.light, data.colors.dark, { darkModeStrategy });
     const yamlSnippet = dashyColorExporter.generateDashyYAML(data.colors.light, data.colors.dark);
